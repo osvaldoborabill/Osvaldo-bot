@@ -1,7 +1,7 @@
 {
   "name": "Osvaldo-bot",
   "version": "1.0.0",
-  "description": "anna julya",
+  "description": "annajulya",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
