@@ -1,0 +1,18 @@
+{
+  "name": "Osvaldo",
+  "version": "1.0.0",
+  "description": "gos-to-so",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "@discordjs/voice": "^0.16.0",
+    "play-dl": "^1.9.6",
+    "dotenv": "^16.4.0"
+  }
+}
