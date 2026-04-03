@@ -879,12 +879,71 @@ const inviteCmd = {
   },
 };
 
+// ── DM All Members ──
+const dmAllCmd = {
+  data: new SlashCommandBuilder().setName('dm-all').setDescription('Enviar DM para todos os membros do servidor')
+    .addStringOption(o => o.setName('message').setDescription('Mensagem de texto').setRequired(false))
+    .addStringOption(o => o.setName('title').setDescription('Título do embed (opcional — ativa modo embed)').setRequired(false))
+    .addStringOption(o => o.setName('color').setDescription('Cor do embed em hex ex: #FF0000 (padrão: #5865F2)').setRequired(false)),
+  async execute(interaction, client) {
+    if (!requirePermission(interaction, PermissionFlagsBits.Administrator)) return;
+
+    const message = interaction.options.getString('message');
+    const title   = interaction.options.getString('title');
+    const color   = parseInt((interaction.options.getString('color') || '#5865F2').replace('#', ''), 16);
+
+    if (!message && !title) {
+      return interaction.reply({ content: '❌ Informe ao menos uma mensagem ou um título.', ephemeral: true });
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    // Busca todos os membros
+    const members = await interaction.guild.members.fetch().catch(() => null);
+    if (!members) return interaction.editReply('❌ Não foi possível buscar os membros.');
+
+    const humans = [...members.values()].filter(m => !m.user.bot);
+
+    let sent = 0, failed = 0;
+
+    await interaction.editReply(`⏳ Enviando DM para **${humans.length}** membros... isso pode levar alguns minutos.`);
+
+    for (const member of humans) {
+      try {
+        if (title) {
+          // Modo embed
+          const embed = new EmbedBuilder()
+            .setColor(color)
+            .setTitle(title)
+            .setFooter({ text: `📢 Mensagem de ${interaction.guild.name}`, iconURL: interaction.guild.iconURL() })
+            .setTimestamp();
+          if (message) embed.setDescription(message);
+          await member.send({ embeds: [embed] });
+        } else {
+          // Modo texto simples
+          await member.send(`📢 **${interaction.guild.name}**\n\n${message}`);
+        }
+        sent++;
+      } catch {
+        failed++; // DMs fechadas ou bloqueadas
+      }
+
+      // Delay pequeno para evitar rate limit do Discord (1 msg/s é seguro)
+      await new Promise(r => setTimeout(r, 1100));
+    }
+
+    await interaction.editReply({
+      content: `✅ DM enviada!\n📨 **Enviadas:** ${sent}\n❌ **Falhas (DM fechada):** ${failed}`,
+    });
+  },
+};
+
 // ── Collect all slash commands ──
 slashCommands.push(
   banCmd, kickCmd, muteCmd, unmuteCmd, warnCmd, warnsCmd, clearwarnsCmd,
   softbanCmd, unbanCmd, modlogCmd,
   purgeCmd, lockdownCmd, unlockCmd, slowmodeCmd, nickCmd,
-  announceCmd, embedCmd, dmCmd, dmEmbedCmd, pingEveryoneCmd, pingHereCmd,
+  announceCmd, embedCmd, dmCmd, dmEmbedCmd, dmAllCmd, pingEveryoneCmd, pingHereCmd,
   roleAddCmd, roleRemoveCmd, roleColorCmd, roleInfoCmd, roleAllCmd,
   scheduleCmd, repeatCmd, scheduleListCmd, scheduleCancelCmd, repeatListCmd, repeatStopCmd,
   automodCmd,
@@ -1203,9 +1262,14 @@ cron.schedule('* * * * *', async () => {
 setInterval(() => client.cooldowns.clear(), 60_000);
 
 // ─── Login ─────────────────────────────────────────────────────────────────────
-if (!process.env.DISCORD_TOKEN) {
-  console.error('❌ DISCORD_TOKEN is not set. Please set it in Railway environment variables.');
-  process.exit(1);
+// Quando importado pelo deploy-commands.js, não faz login — só exporta os comandos
+if (require.main === module) {
+  if (!process.env.DISCORD_TOKEN) {
+    console.error('❌ DISCORD_TOKEN is not set. Please set it in Railway environment variables.');
+    process.exit(1);
+  }
+  client.login(process.env.DISCORD_TOKEN);
 }
 
-client.login(process.env.DISCORD_TOKEN);
+// Exporta a lista de comandos para uso pelo deploy-commands.js
+module.exports = { slashCommands };
