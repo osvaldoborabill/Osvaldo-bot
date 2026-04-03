@@ -42,17 +42,25 @@ function canJoin(guildId) {
 // ===== PLAYER =====
 async function playNext(guildId) {
   const queue = queues.get(guildId);
+  if (!queue) return;
 
-  if (!queue || queue.songs.length === 0) {
-    queue.connection.destroy();
-    queues.delete(guildId);
+  if (queue.songs.length === 0) {
+    // espera 10s antes de sair (evita bug do Railway)
+    setTimeout(() => {
+      if (queue.songs.length === 0) {
+        queue.connection.destroy();
+        queues.delete(guildId);
+      }
+    }, 10000);
     return;
   }
 
   const song = queue.songs[0];
 
   try {
-    const stream = await play.stream(song.url);
+    const stream = await play.stream(song.url, {
+      discordPlayerCompatibility: true
+    });
 
     const resource = createAudioResource(stream.stream, {
       inputType: stream.type,
@@ -64,7 +72,7 @@ async function playNext(guildId) {
     queue.player.play(resource);
 
   } catch (err) {
-    console.error(err);
+    console.error("Erro ao tocar:", err);
     queue.songs.shift();
     playNext(guildId);
   }
@@ -87,28 +95,34 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('volume')
-    .setDescription('Ajustar volume')
+    .setDescription('Volume')
     .addIntegerOption(opt =>
       opt.setName('valor').setDescription('0 a 100').setRequired(true)
     ),
 
-  new SlashCommandBuilder().setName('loop').setDescription('Ativar/desativar loop')
+  new SlashCommandBuilder().setName('loop').setDescription('Loop')
 ].map(cmd => cmd.toJSON());
 
 // ===== REGISTRO =====
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 (async () => {
-  await rest.put(
-    Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-    { body: commands }
-  );
+  try {
+    console.log("🔄 Registrando comandos...");
+    await rest.put(
+      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+      { body: commands }
+    );
+    console.log("✅ Comandos registrados!");
+  } catch (err) {
+    console.error(err);
+  }
 })();
 
 // ===== INTERAÇÕES =====
 client.on('interactionCreate', async interaction => {
 
-  // ===== BOTÕES =====
+  // BOTÕES
   if (interaction.isButton()) {
     const queue = queues.get(interaction.guildId);
     if (!queue) return;
@@ -168,9 +182,13 @@ client.on('interactionCreate', async interaction => {
       });
     }
 
-    const info = await play.search(query, { limit: 1 });
-    if (!info.length)
-      return interaction.reply("❌ Não encontrado.");
+    const info = await play.search(query, {
+      limit: 1,
+      source: { youtube: "video" }
+    });
+
+    if (!info || info.length === 0)
+      return interaction.reply("❌ Música não encontrada.");
 
     const song = {
       title: info[0].title,
