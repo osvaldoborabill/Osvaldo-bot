@@ -1,6 +1,5 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
-const { DisTube } = require('distube');
 const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs');
@@ -14,39 +13,10 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
-    GatewayIntentBits.GuildVoiceStates,
   ],
   partials: [Partials.Channel, Partials.Message],
   rest: { timeout: 15000 },
 });
-
-// ─── DisTube (Música) ─────────────────────────────────────────────────────────
-client.distube = new DisTube(client, {
-  emitNewSongOnly: false,
-  joinNewVoiceChannel: true,
-});
-
-client.distube
-  .on('playSong', (queue, song) => {
-    queue.textChannel?.send({
-      embeds: [{
-        title: '🎵 Tocando Agora',
-        description: `**[${song.name}](${song.url})**\nDuração: \`${song.formattedDuration}\` | Pedido por: ${song.user}`,
-        color: 0x1DB954,
-        thumbnail: { url: song.thumbnail },
-      }]
-    }).catch(() => {});
-  })
-  .on('addSong', (queue, song) => {
-    queue.textChannel?.send(`✅ **${song.name}** adicionado à fila! Posição: #${queue.songs.length}`).catch(() => {});
-  })
-  .on('finish', queue => {
-    queue.textChannel?.send('✅ Fila finalizada! Saindo do canal de voz.').catch(() => {});
-  })
-  .on('error', (channel, err) => {
-    console.error('[DisTube] Error:', err.message);
-    channel?.send(`❌ Erro de música: ${err.message}`).catch(() => {});
-  });
 
 // ─── Commands & Events ────────────────────────────────────────────────────────
 loadCommands(client);
